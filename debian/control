@@ -1,0 +1,12 @@
+Source: ros-dashing-ros2-ouster
+Section: misc
+Priority: optional
+Maintainer: Steve Macenski <stevenmacenski@gmail.com>
+Build-Depends: debhelper (>= 9.0.0), libpcl-apps1.8, libpcl-common1.8, libpcl-features1.8, libpcl-filters1.8, libpcl-io1.8, libpcl-kdtree1.8, libpcl-keypoints1.8, libpcl-ml1.8, libpcl-octree1.8, libpcl-outofcore1.8, libpcl-people1.8, libpcl-recognition1.8, libpcl-registration1.8, libpcl-sample-consensus1.8, libpcl-search1.8, libpcl-segmentation1.8, libpcl-stereo1.8, libpcl-surface1.8, libpcl-tracking1.8, libpcl-visualization1.8, ros-dashing-ament-cmake, ros-dashing-ament-lint-auto, ros-dashing-ament-lint-common, ros-dashing-builtin-interfaces, ros-dashing-geometry-msgs, ros-dashing-launch, ros-dashing-launch-ros, ros-dashing-ouster-msgs, ros-dashing-pcl-conversions, ros-dashing-rclcpp, ros-dashing-rclcpp-components, ros-dashing-rclcpp-lifecycle, ros-dashing-sensor-msgs, ros-dashing-std-srvs, ros-dashing-tf2-geometry-msgs, ros-dashing-tf2-ros, ros-dashing-visualization-msgs, ros-dashing-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-dashing-ros2-ouster
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libpcl-apps1.8, libpcl-common1.8, libpcl-features1.8, libpcl-filters1.8, libpcl-io1.8, libpcl-kdtree1.8, libpcl-keypoints1.8, libpcl-ml1.8, libpcl-octree1.8, libpcl-outofcore1.8, libpcl-people1.8, libpcl-recognition1.8, libpcl-registration1.8, libpcl-sample-consensus1.8, libpcl-search1.8, libpcl-segmentation1.8, libpcl-stereo1.8, libpcl-surface1.8, libpcl-tracking1.8, libpcl-visualization1.8, ros-dashing-builtin-interfaces, ros-dashing-geometry-msgs, ros-dashing-launch, ros-dashing-launch-ros, ros-dashing-ouster-msgs, ros-dashing-pcl-conversions, ros-dashing-rclcpp, ros-dashing-rclcpp-components, ros-dashing-rclcpp-lifecycle, ros-dashing-sensor-msgs, ros-dashing-std-srvs, ros-dashing-tf2-geometry-msgs, ros-dashing-tf2-ros, ros-dashing-visualization-msgs, ros-dashing-ros-workspace
+Description: ROS2 Drivers for the Ouster OS-1 Lidar
