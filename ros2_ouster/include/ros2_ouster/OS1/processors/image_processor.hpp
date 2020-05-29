@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,8 @@
 #include <utility>
 #include <algorithm>
 
+#include "rclcpp/qos.hpp"
+
 #include "ros2_ouster/conversions.hpp"
 
 #include "sensor_msgs/msg/image.hpp"
@@ -38,8 +40,8 @@ namespace OS1
 class ImageProcessor : public ros2_ouster::DataProcessorInterface
 {
 public:
-  typedef std::vector<image_os::ImageOS> OSImage;
-  typedef OSImage::iterator OSImageIt;
+  using OSImage = std::vector<image_os::ImageOS>;
+  using OSImageIt = OSImage::iterator;
 
   /**
    * @brief A constructor for OS1::ImageProcessor
@@ -50,7 +52,8 @@ public:
   ImageProcessor(
     const rclcpp_lifecycle::LifecycleNode::SharedPtr node,
     const ros2_ouster::Metadata & mdata,
-    const std::string & frame)
+    const std::string & frame,
+    const rclcpp::QoS & qos)
   : DataProcessorInterface(), _node(node), _frame(frame)
   {
     _height = OS1::pixels_per_column;
@@ -61,13 +64,13 @@ public:
         mdata.beam_altitude_angles);
 
     _range_image_pub = _node->create_publisher<sensor_msgs::msg::Image>(
-      "range_image", rclcpp::SensorDataQoS());
+      "range_image", qos);
     _intensity_image_pub = _node->create_publisher<sensor_msgs::msg::Image>(
-      "intensity_image", rclcpp::SensorDataQoS());
+      "intensity_image", qos);
     _noise_image_pub = _node->create_publisher<sensor_msgs::msg::Image>(
-      "noise_image", rclcpp::SensorDataQoS());
+      "noise_image", qos);
     _reflectivity_image_pub = _node->create_publisher<sensor_msgs::msg::Image>(
-      "reflectivity_image", rclcpp::SensorDataQoS());
+      "reflectivity_image", qos);
 
     _range_image.width = _width;
     _range_image.height = _height;
@@ -170,10 +173,10 @@ public:
    * @brief Process method to create images
    * @param data the packet data
    */
-  bool process(uint8_t * data) override
+  bool process(uint8_t * data, uint64_t override_ts) override
   {
     OSImageIt it = _information_image.begin();
-    _batch_and_publish(data, it);
+    _batch_and_publish(data, it, override_ts);
     return true;
   }
 
@@ -204,7 +207,7 @@ private:
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr _intensity_image_pub;
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr _range_image_pub;
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr _noise_image_pub;
-  std::function<void(const uint8_t *, OSImageIt)> _batch_and_publish;
+  std::function<void(const uint8_t *, OSImageIt, uint64_t)> _batch_and_publish;
   rclcpp_lifecycle::LifecycleNode::SharedPtr _node;
   sensor_msgs::msg::Image _reflectivity_image;
   sensor_msgs::msg::Image _intensity_image;

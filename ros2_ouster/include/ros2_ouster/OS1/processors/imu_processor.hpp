@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,7 @@
 
 #include "ros2_ouster/conversions.hpp"
 
+#include "rclcpp/qos.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 
@@ -45,11 +46,11 @@ public:
   IMUProcessor(
     const rclcpp_lifecycle::LifecycleNode::SharedPtr node,
     const ros2_ouster::Metadata & mdata,
-    const std::string & frame)
+    const std::string & frame,
+    const rclcpp::QoS & qos)
   : DataProcessorInterface(), _node(node), _frame(frame)
   {
-    _pub = node->create_publisher<sensor_msgs::msg::Imu>(
-      "imu", rclcpp::SensorDataQoS());
+    _pub = node->create_publisher<sensor_msgs::msg::Imu>("imu", qos);
   }
 
   /**
@@ -64,10 +65,10 @@ public:
    * @brief Process method to create imu
    * @param data the packet data
    */
-  bool process(uint8_t * data) override
+  bool process(uint8_t * data, uint64_t override_ts) override
   {
     if (_pub->get_subscription_count() > 0 && _pub->is_activated()) {
-      _pub->publish(ros2_ouster::toMsg(data, _frame));
+      _pub->publish(ros2_ouster::toMsg(data, _frame, override_ts));
     }
     return true;
   }

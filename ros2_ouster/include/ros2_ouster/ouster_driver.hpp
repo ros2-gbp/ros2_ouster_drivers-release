@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,12 +35,14 @@
 
 namespace ros2_ouster
 {
+
+class SensorInterface;
+
 /**
  * @class ros2_ouster::OusterDriver
  * @brief A lifecycle interface implementation of a Ouster OS-1 Lidar
  * driver in ROS2.
  */
-template<typename SensorT>
 class OusterDriver : public lifecycle_interface::LifecycleInterface
 {
 public:
@@ -51,7 +53,9 @@ public:
    * @brief A constructor for ros2_ouster::OusterDriver
    * @param options Node options for lifecycle node interfaces
    */
-  explicit OusterDriver(const rclcpp::NodeOptions & options);
+  OusterDriver(
+    std::unique_ptr<SensorInterface> sensor,
+    const rclcpp::NodeOptions & options);
 
   /**
    * @brief A destructor for ros2_ouster::OusterDriver
@@ -130,12 +134,17 @@ private:
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr _reset_srv;
   rclcpp::Service<ouster_msgs::srv::GetMetadata>::SharedPtr _metadata_srv;
 
-  typename SensorT::SharedPtr _sensor;
+  std::unique_ptr<SensorInterface> _sensor;
   std::multimap<ClientState, DataProcessorInterface *> _data_processors;
   rclcpp::TimerBase::SharedPtr _process_timer;
 
   std::string _laser_sensor_frame, _laser_data_frame, _imu_data_frame;
   std::unique_ptr<tf2_ros::StaticTransformBroadcaster> _tf_b;
+
+  bool _use_system_default_qos;
+  bool _use_ros_time;
+
+  std::uint32_t _os1_proc_mask;
 };
 
 }  // namespace ros2_ouster

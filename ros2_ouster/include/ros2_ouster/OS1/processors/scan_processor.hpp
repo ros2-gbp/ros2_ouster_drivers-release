@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,9 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <utility>
+
+#include "rclcpp/qos.hpp"
 
 #include "ros2_ouster/conversions.hpp"
 
@@ -37,8 +40,8 @@ namespace OS1
 class ScanProcessor : public ros2_ouster::DataProcessorInterface
 {
 public:
-  typedef std::vector<scan_os::ScanOS> OSScan;
-  typedef OSScan::iterator OSScanIt;
+  using OSScan = std::vector<scan_os::ScanOS>;
+  using OSScanIt = OSScan::iterator;
 
   /**
    * @brief A constructor for OS1::ScanProcessor
@@ -49,12 +52,12 @@ public:
   ScanProcessor(
     const rclcpp_lifecycle::LifecycleNode::SharedPtr node,
     const ros2_ouster::Metadata & mdata,
-    const std::string & frame)
+    const std::string & frame,
+    const rclcpp::QoS & qos)
   : DataProcessorInterface(), _node(node), _frame(frame)
   {
     _mdata = mdata;
-    _pub = _node->create_publisher<sensor_msgs::msg::LaserScan>(
-      "scan", rclcpp::SensorDataQoS());
+    _pub = _node->create_publisher<sensor_msgs::msg::LaserScan>("scan", qos);
     _height = OS1::pixels_per_column;
     _width = OS1::n_cols_of_lidar_mode(
       OS1::lidar_mode_of_string(mdata.mode));
@@ -77,9 +80,12 @@ public:
       [&](uint64_t scan_ts) mutable
       {
         if (_pub->get_subscription_count() > 0 && _pub->is_activated()) {
-          sensor_msgs::msg::LaserScan msg = ros2_ouster::toMsg(_aggregated_scans,
-          std::chrono::nanoseconds(scan_ts), _frame, _mdata, _ring);
-          _pub->publish(msg);
+          auto msg_ptr =
+          std::make_unique<sensor_msgs::msg::LaserScan>(
+            std::move(ros2_ouster::toMsg(
+              _aggregated_scans, std::chrono::nanoseconds(scan_ts),
+              _frame, _mdata, _ring)));
+          _pub->publish(std::move(msg_ptr));
         }
       });
   }
@@ -96,10 +102,10 @@ public:
    * @brief Process method to create scan
    * @param data the packet data
    */
-  bool process(uint8_t * data) override
+  bool process(uint8_t * data, uint64_t override_ts) override
   {
     OSScanIt it = _aggregated_scans.begin();
-    _batch_and_publish(data, it);
+    _batch_and_publish(data, it, override_ts);
     return true;
   }
 
@@ -121,7 +127,7 @@ public:
 
 private:
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::LaserScan>::SharedPtr _pub;
-  std::function<void(const uint8_t *, OSScanIt)> _batch_and_publish;
+  std::function<void(const uint8_t *, OSScanIt, uint64_t)> _batch_and_publish;
   std::shared_ptr<pcl::PointCloud<scan_os::ScanOS>> _cloud;
   rclcpp_lifecycle::LifecycleNode::SharedPtr _node;
   std::vector<double> _xyz_lut;

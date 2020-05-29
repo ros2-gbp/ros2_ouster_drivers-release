@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -28,6 +28,7 @@ struct Configuration
   int imu_port;
   int lidar_port;
   std::string lidar_mode;
+  std::string timestamp_mode;
 };
 
 }  // namespace ros2_ouster

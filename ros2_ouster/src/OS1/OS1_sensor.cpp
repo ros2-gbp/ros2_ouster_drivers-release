@@ -1,4 +1,4 @@
-// Copyright 2020
+// Copyright 2020, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -49,9 +49,17 @@ void OS1Sensor::configure(const ros2_ouster::Configuration & config)
     exit(-1);
   }
 
+  if (!OS1::timestamp_mode_of_string(config.timestamp_mode)) {
+    throw ros2_ouster::OusterDriverException(
+            std::string(
+              "Invalid timestamp mode %s!", config.timestamp_mode.c_str()));
+    exit(-1);
+  }
+
   _ouster_client = OS1::init_client(
     config.lidar_ip, config.computer_ip,
     OS1::lidar_mode_of_string(config.lidar_mode),
+    OS1::timestamp_mode_of_string(config.timestamp_mode),
     config.lidar_port, config.imu_port);
 
   if (!_ouster_client) {
@@ -92,6 +100,8 @@ uint8_t * OS1Sensor::readPacket(const ros2_ouster::ClientState & state)
       } else {
         return nullptr;
       }
+    default:
+      return nullptr;
   }
 }
 
@@ -100,7 +110,7 @@ ros2_ouster::Metadata OS1Sensor::getMetadata()
   if (_ouster_client) {
     return OS1::parse_metadata(OS1::get_metadata(*_ouster_client));
   } else {
-    return {"UNKNOWN", "UNKNOWN", "UNNKOWN", "UNNKOWN",
+    return {"UNKNOWN", "UNKNOWN", "UNNKOWN", "UNNKOWN", "UNKNOWN",
       {}, {}, {}, {}, 7503, 7502};
   }
 }
