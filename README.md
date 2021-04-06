@@ -1,3 +1,28 @@
+## ros2_ouster_drivers (rolling) - 0.2.0-4
+
+The packages in the `ros2_ouster_drivers` repository were released into the `rolling` distro by running `/usr/bin/bloom-release --track rolling --rosdistro rolling ros2_ouster_drivers` on `Tue, 06 Apr 2021 23:48:19 -0000`
+
+These packages were released:
+- `ouster_msgs`
+- `ros2_ouster`
+
+Version of package(s) in repository `ros2_ouster_drivers`:
+
+- upstream repository: https://github.com/SteveMacenski/ros2_ouster_drivers.git
+- release repository: https://github.com/ros2-gbp/ros2_ouster_drivers-release.git
+- rosdistro version: `0.2.0-3`
+- old version: `0.2.0-3`
+- new version: `0.2.0-4`
+
+Versions of tools used:
+
+- bloom version: `0.10.3`
+- catkin_pkg version: `0.4.23`
+- rosdep version: `0.20.0`
+- rosdistro version: `0.8.3`
+- vcstools version: `0.1.42`
+
+
 ## ros2_ouster_drivers (rolling) - 0.2.0-3
 
 The packages in the `ros2_ouster_drivers` repository were released into the `rolling` distro by running `/home/cottsay/.local/bin/bloom-release ros2_ouster_drivers -r rolling` on `Fri, 12 Mar 2021 19:56:44 -0000`
