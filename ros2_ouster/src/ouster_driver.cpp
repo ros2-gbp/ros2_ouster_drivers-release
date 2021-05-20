@@ -1,4 +1,4 @@
-// Copyright 2020, Steve Macenski
+// Copyright 2021, Steve Macenski
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,11 +18,12 @@
 #include <vector>
 
 #include "rclcpp/qos.hpp"
-#include "ros2_ouster/ouster_driver.hpp"
 #include "ros2_ouster/exception.hpp"
 #include "ros2_ouster/interfaces/lifecycle_interface.hpp"
 #include "ros2_ouster/interfaces/sensor_interface.hpp"
-#include "ros2_ouster/OS1/processor_factories.hpp"
+#include "ros2_ouster/ouster_driver.hpp"
+#include "ros2_ouster/processors/processor_factories.hpp"
+#include "ros2_ouster/client/types.h"
 
 namespace ros2_ouster
 {
@@ -48,19 +49,24 @@ OusterDriver::OusterDriver(
   this->declare_parameter("laser_frame", std::string("laser_data_frame"));
   this->declare_parameter("imu_frame", std::string("imu_data_frame"));
   this->declare_parameter("use_system_default_qos", false);
-  this->declare_parameter("os1_proc_mask", std::string("IMG|PCL|IMU|SCAN"));
+  this->declare_parameter("proc_mask", std::string("IMG|PCL|IMU|SCAN"));
 }
 
 OusterDriver::~OusterDriver() = default;
 
 void OusterDriver::onConfigure()
 {
+  RCLCPP_INFO(
+      this->get_logger(),
+      "This driver is compatible with sensors running fw 2.x.");
+
   ros2_ouster::Configuration lidar_config;
   try {
     lidar_config.lidar_ip = get_parameter("lidar_ip").as_string();
     lidar_config.computer_ip = get_parameter("computer_ip").as_string();
   } catch (...) {
-    RCLCPP_FATAL(this->get_logger(),
+    RCLCPP_FATAL(
+      this->get_logger(),
       "Failed to get lidar or IMU IP address or "
       "hostname. An IP address for both are required!");
     exit(-1);
@@ -70,10 +76,13 @@ void OusterDriver::onConfigure()
   lidar_config.lidar_port = get_parameter("lidar_port").as_int();
   lidar_config.lidar_mode = get_parameter("lidar_mode").as_string();
   lidar_config.timestamp_mode = get_parameter("timestamp_mode").as_string();
+
   if (lidar_config.timestamp_mode == "TIME_FROM_ROS_RECEPTION") {
-    RCLCPP_WARN(this->get_logger(),
+    RCLCPP_WARN(
+      this->get_logger(),
       "Using TIME_FROM_ROS_RECEPTION to stamp data with ROS time on "
       "reception. This has unmodelled latency!");
+    lidar_config.timestamp_mode = "TIME_FROM_INTERNAL_OSC";
     _use_ros_time = true;
   } else {
     _use_ros_time = false;
@@ -84,13 +93,15 @@ void OusterDriver::onConfigure()
   _imu_data_frame = get_parameter("imu_frame").as_string();
   _use_system_default_qos = get_parameter("use_system_default_qos").as_bool();
 
-  _os1_proc_mask =
-    ros2_ouster::toProcMask(get_parameter("os1_proc_mask").as_string());
+  _proc_mask =
+    ros2_ouster::toProcMask(get_parameter("proc_mask").as_string());
 
-  RCLCPP_INFO(this->get_logger(),
+  RCLCPP_INFO(
+    this->get_logger(),
     "Connecting to sensor at %s.", lidar_config.lidar_ip.c_str());
-  RCLCPP_INFO(this->get_logger(),
-    "Broadcasting data from sensor to %s.", lidar_config.computer_ip.c_str());
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Sending data from sensor to %s.", lidar_config.computer_ip.c_str());
 
   _reset_srv = this->create_service<std_srvs::srv::Empty>(
     "~/reset", std::bind(&OusterDriver::resetService, this, _1, _2, _3));
@@ -104,23 +115,25 @@ void OusterDriver::onConfigure()
     exit(-1);
   }
 
-  ros2_ouster::Metadata mdata = _sensor->getMetadata();
+  _full_rotation_accumulator = std::make_shared<sensor::FullRotationAccumulator>(
+    _sensor->getMetadata(), _sensor->getPacketFormat());
 
   if (_use_system_default_qos) {
     RCLCPP_INFO(
       this->get_logger(), "Using system defaults QoS for sensor data");
     _data_processors = ros2_ouster::createProcessors(
-      shared_from_this(), mdata, _imu_data_frame, _laser_data_frame,
-      rclcpp::SystemDefaultsQoS(), _os1_proc_mask);
+      shared_from_this(), _sensor->getMetadata(), _imu_data_frame, _laser_data_frame,
+      rclcpp::SystemDefaultsQoS(),
+      _sensor->getPacketFormat(), _full_rotation_accumulator, _proc_mask);
   } else {
     _data_processors = ros2_ouster::createProcessors(
-      shared_from_this(), mdata, _imu_data_frame, _laser_data_frame,
-      rclcpp::SensorDataQoS(), _os1_proc_mask);
+      shared_from_this(), _sensor->getMetadata(), _imu_data_frame, _laser_data_frame,
+      rclcpp::SensorDataQoS(), _sensor->getPacketFormat(), _full_rotation_accumulator, _proc_mask);
   }
 
   _tf_b = std::make_unique<tf2_ros::StaticTransformBroadcaster>(
     shared_from_this());
-  broadcastStaticTransforms(mdata);
+  broadcastStaticTransforms(_sensor->getMetadata());
 }
 
 void OusterDriver::onActivate()
@@ -130,9 +143,11 @@ void OusterDriver::onActivate()
     it->second->onActivate();
   }
 
-  // speed of the Ouster lidars is 1280 hz
-  _process_timer = this->create_wall_timer(781250ns,
-      std::bind(&OusterDriver::processData, this));
+  // Speed of the lidar is 1280 hz. We fire our timer event at 2x that rate to
+  // ensure we can process all of the incoming data in a timely manner.
+  // See: https://github.com/SteveMacenski/ros2_ouster_drivers/issues/55
+  _process_timer = this->create_wall_timer(
+    390625ns, std::bind(&OusterDriver::processData, this));
 }
 
 void OusterDriver::onError()
@@ -165,21 +180,22 @@ void OusterDriver::onShutdown()
   _tf_b.reset();
 
   DataProcessorMapIt it;
-  for (it = _data_processors.begin(); it != _data_processors.end(); ++it) {
-    delete it->second;
-  }
   _data_processors.clear();
 }
 
 void OusterDriver::broadcastStaticTransforms(
-  const ros2_ouster::Metadata & mdata)
+  const ouster::sensor::sensor_info & mdata)
 {
   if (_tf_b) {
     std::vector<geometry_msgs::msg::TransformStamped> transforms;
-    transforms.push_back(toMsg(mdata.imu_to_sensor_transform,
-      _laser_sensor_frame, _imu_data_frame, this->now()));
-    transforms.push_back(toMsg(mdata.lidar_to_sensor_transform,
-      _laser_sensor_frame, _laser_data_frame, this->now()));
+    transforms.push_back(
+      toMsg(
+        mdata.imu_to_sensor_transform,
+        _laser_sensor_frame, _imu_data_frame, this->now()));
+    transforms.push_back(
+      toMsg(
+        mdata.lidar_to_sensor_transform,
+        _laser_sensor_frame, _laser_data_frame, this->now()));
     _tf_b->sendTransform(transforms);
   }
 }
@@ -187,25 +203,41 @@ void OusterDriver::broadcastStaticTransforms(
 void OusterDriver::processData()
 {
   try {
-    ClientState state = _sensor->get();
-    RCLCPP_DEBUG(this->get_logger(),
+    ouster::sensor::client_state state = _sensor->get();
+    RCLCPP_DEBUG(
+      this->get_logger(),
       "Packet with state: %s",
       ros2_ouster::toString(state).c_str());
 
-    uint8_t * packet_data = _sensor->readPacket(state);
+    _lidar_packet_data = _sensor->readLidarPacket(state);
+    _imu_packet_data = _sensor->readImuPacket(state);
 
-    if (packet_data) {
-      std::pair<DataProcessorMapIt, DataProcessorMapIt> key_its;
-      key_its = _data_processors.equal_range(state);
-      uint64_t override_ts =
-        this->_use_ros_time ? this->now().nanoseconds() : 0;
+    std::pair<DataProcessorMapIt, DataProcessorMapIt> key_its;
+
+    uint64_t override_ts =
+      this->_use_ros_time ? this->now().nanoseconds() : 0;
+
+    if (_lidar_packet_data) {
+      _full_rotation_accumulator->accumulate(_lidar_packet_data, override_ts);
+
+      key_its = _data_processors.equal_range(ouster::sensor::client_state::LIDAR_DATA);
 
       for (DataProcessorMapIt it = key_its.first; it != key_its.second; it++) {
-        it->second->process(packet_data, override_ts);
+        it->second->process(_lidar_packet_data, override_ts);
       }
     }
+
+    if (_imu_packet_data) {
+      key_its = _data_processors.equal_range(ouster::sensor::client_state::IMU_DATA);
+
+      for (DataProcessorMapIt it = key_its.first; it != key_its.second; it++) {
+        it->second->process(_imu_packet_data, override_ts);
+      }
+    }
+
   } catch (const OusterDriverException & e) {
-    RCLCPP_WARN(this->get_logger(),
+    RCLCPP_WARN(
+      this->get_logger(),
       "Failed to process packet with exception %s.", e.what());
   }
 }
