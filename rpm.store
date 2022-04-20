@@ -1,1 +1,1 @@
-{"base": "de0438c", "parent": "rpm/rolling/ros2_ouster", "previous": "8350b2d", "trim": "", "trimbase": ""}
+{"base": "fec4195", "parent": "rpm/humble/ros2_ouster", "previous": "b0d4c43", "trim": "", "trimbase": ""}
